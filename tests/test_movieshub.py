@@ -185,12 +185,13 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertIn("Movie C", remaining_titles)
 
     # -----------------------------------------------------------------------
-    # 6. Own Website Scraper & Import Confirmation Flow (Domain verification)
+    # 6. Own Website Scraper & Import Flow (Multi-Quality & Smallest File Selection)
     # -----------------------------------------------------------------------
     @patch.dict(os.environ, {"OWN_SITE_URL": "https://my-own-site.com"})
-    @patch("site_grabber.allowed_by_robots", return_value=True)
+    @patch("site_grabber.check_robots_permission", return_value=(True, None))
     @patch("site_grabber.fetch_html")
     def test_06_site_grabber_and_import(self, mock_html, mock_robots):
+        # Multi-quality HTML with multiple links per quality
         mock_html.return_value = """
         <!DOCTYPE html>
         <html>
@@ -203,8 +204,26 @@ class MoviesHubTestCase(unittest.TestCase):
           <h1 class="movie-title">Leo</h1>
           <div class="year">2023</div>
           <div class="genre"><a href="/g/action">Action</a><a href="/g/crime">Crime</a></div>
-          <div class="downloads">
-            <a class="download-btn" href="/download/leo-2023-1080p.mkv">Download 1080p WebRip</a>
+          
+          <!-- 1080p options -->
+          <div class="download-group">
+            <h3>1080p Full HD</h3>
+            <a class="download-btn" href="/download/leo-1080p-server1.mkv">1080p Server 1 (2.4 GB)</a>
+            <a class="download-btn" href="/download/leo-1080p-server2.mkv">1080p Server 2 (1.2 GB)</a>
+            <a class="download-btn" href="/download/leo-1080p-server3.mkv">1080p Server 3 (1.8 GB)</a>
+          </div>
+
+          <!-- 720p options -->
+          <div class="download-group">
+            <h3>720p HD</h3>
+            <a class="download-btn" href="/download/leo-720p-server1.mkv">720p Server 1 (1.1 GB)</a>
+            <a class="download-btn" href="/download/leo-720p-server2.mkv">720p Server 2 (700 MB)</a>
+          </div>
+
+          <!-- 480p options -->
+          <div class="download-group">
+            <h3>480p SD</h3>
+            <a class="download-btn" href="/download/leo-480p-server1.mkv">480p Server 1 (500 MB)</a>
           </div>
         </body>
         </html>
@@ -225,28 +244,72 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertEqual(preview["poster"], "https://my-own-site.com/posters/leo.jpg")
         self.assertEqual(preview["year"], "2023")
         self.assertIn("Action", preview["genre"])
-        self.assertEqual(preview["download_url"], "https://my-own-site.com/download/leo-2023-1080p.mkv")
+
+        # Check multi-quality options extracted
+        options = preview.get("download_options", [])
+        self.assertEqual(len(options), 3)
+
+        # 1080p should select smallest file (1.2 GB, not 2.4 GB or 1.8 GB)
+        opt_1080 = next((o for o in options if o["quality"] == "1080p"), None)
+        self.assertIsNotNone(opt_1080)
+        self.assertEqual(opt_1080["url"], "https://my-own-site.com/download/leo-1080p-server2.mkv")
+        self.assertEqual(opt_1080["size"], "1.2 GB")
+
+        # 720p should select smallest file (700 MB, not 1.1 GB)
+        opt_720 = next((o for o in options if o["quality"] == "720p"), None)
+        self.assertIsNotNone(opt_720)
+        self.assertEqual(opt_720["url"], "https://my-own-site.com/download/leo-720p-server2.mkv")
+        self.assertEqual(opt_720["size"], "700 MB")
+
+        # 480p should select 500 MB
+        opt_480 = next((o for o in options if o["quality"] == "480p"), None)
+        self.assertIsNotNone(opt_480)
+        self.assertEqual(opt_480["url"], "https://my-own-site.com/download/leo-480p-server1.mkv")
+        self.assertEqual(opt_480["size"], "500 MB")
 
         # 3. Confirm & save
         res_save = self.client.post("/admin/api/import/save", json=preview)
         self.assertEqual(res_save.status_code, 201)
+
+        # Verify saved in JSON
+        with open(TAMIL_FILE, "r", encoding="utf-8") as f:
+            tamil_data = json.load(f)
+        saved_movie = next((m for m in tamil_data if m["title"] == "Leo"), None)
+        self.assertIsNotNone(saved_movie)
+        self.assertEqual(len(saved_movie.get("download_options", [])), 3)
 
         # 4. Duplicate prevention: try saving same movie again
         res_dup = self.client.post("/admin/api/import/save", json=preview)
         self.assertEqual(res_dup.status_code, 409, "Duplicate movie was not rejected!")
 
     # -----------------------------------------------------------------------
-    # 7. Tamil Movie Card Actions: DOWNLOAD ONLY (No Watch/Play/TMDB)
+    # 7. Robots.txt Explicit Disallow vs Allow
     # -----------------------------------------------------------------------
-    def test_07_tamil_ui_download_only(self):
-        # Insert a sample Tamil movie
+    @patch.dict(os.environ, {"OWN_SITE_URL": "https://my-own-site.com"})
+    @patch("site_grabber.check_robots_permission")
+    def test_07_robots_txt_handling(self, mock_robots):
+        # When robots.txt explicitly disallows the URL
+        mock_robots.return_value = (False, "This URL is disallowed by your website's robots.txt. Please allow this path in robots.txt.")
+        res = self.client.post("/admin/api/import", json={"url": "https://my-own-site.com/movies/secret-movie"})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("This URL is disallowed by your website's robots.txt. Please allow this path in robots.txt.", res.get_json().get("error", ""))
+
+    # -----------------------------------------------------------------------
+    # 8. Tamil Movie Card Actions: DOWNLOAD ONLY (No Watch/Play/TMDB)
+    # -----------------------------------------------------------------------
+    def test_08_tamil_ui_download_only(self):
+        # Insert a sample Tamil movie with multiple download options
         sample = {
             "id": "tamil-uuid-999",
             "title": "Vikram Vedha",
             "poster": "https://example.com/vv.jpg",
             "year": "2022",
             "genre": "Neo-Noir",
-            "download_url": "https://my-site.com/dl/vv.mp4",
+            "download_url": "https://my-site.com/dl/vv-1080p.mp4",
+            "download_options": [
+                {"quality": "1080p", "size": "1.2 GB", "url": "https://my-site.com/dl/vv-1080p.mp4"},
+                {"quality": "720p", "size": "700 MB", "url": "https://my-site.com/dl/vv-720p.mp4"}
+            ],
             "description": "A pragmatic police inspector."
         }
         with open(TAMIL_FILE, "w", encoding="utf-8") as f:
@@ -257,9 +320,14 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         content = res.data.decode("utf-8")
 
-        # Must have DOWNLOAD button
-        self.assertIn("DOWNLOAD NOW", content)
-        self.assertIn(sample["download_url"], content)
+        # Must have Download Options by quality
+        self.assertIn("Download Options", content)
+        self.assertIn("1080p", content)
+        self.assertIn("1.2 GB", content)
+        self.assertIn("720p", content)
+        self.assertIn("700 MB", content)
+        self.assertIn("https://my-site.com/dl/vv-1080p.mp4", content)
+        self.assertIn("https://my-site.com/dl/vv-720p.mp4", content)
 
         # Must NOT show Watch / Play / TMDB / Streaming in actions
         actions_html = content[content.find('class="detail-actions"'):content.find('</main>')]
@@ -269,9 +337,9 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertNotIn("Streaming", actions_html)
 
     # -----------------------------------------------------------------------
-    # 8. TMDB Update Script Isolation
+    # 9. TMDB Update Script Isolation
     # -----------------------------------------------------------------------
-    def test_08_tmdb_update_preserves_admin_tamil_movies(self):
+    def test_09_tmdb_update_preserves_admin_tamil_movies(self):
         tamil_sample = [{
             "id": "persisted-tamil-1",
             "title": "Ponniyin Selvan",
@@ -302,9 +370,9 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertEqual(movies_data[0]["title"], "Interstellar")
 
     # -----------------------------------------------------------------------
-    # 9. App Restart Persistence
+    # 10. App Restart Persistence
     # -----------------------------------------------------------------------
-    def test_09_restart_data_remains(self):
+    def test_10_restart_data_remains(self):
         # Save records
         test_records = [
             {"id": "r1", "title": "Test Tamil 1", "year": "2025", "genre": "Action", "download_url": "https://test.com/dl1"},
@@ -321,6 +389,46 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertEqual(len(items), 2)
         self.assertEqual(items[0]["title"], "Test Tamil 1")
         self.assertEqual(items[1]["title"], "Test Tamil 2")
+
+    # -----------------------------------------------------------------------
+    # 11. Unknown File Size Not Guessed
+    # -----------------------------------------------------------------------
+    @patch.dict(os.environ, {"OWN_SITE_URL": "https://my-own-site.com"})
+    @patch("site_grabber.check_robots_permission", return_value=(True, None))
+    @patch("site_grabber.fetch_html")
+    def test_11_unknown_size_not_guessed(self, mock_html, mock_robots):
+        mock_html.return_value = """
+        <!DOCTYPE html>
+        <html>
+        <body>
+          <h1>Mystery Movie</h1>
+          <a class="download-btn" href="/download/mystery-1080p.mkv">Download 1080p</a>
+        </body>
+        </html>
+        """
+        # Scrape with HEAD fallback disabled/mocked returning None
+        with patch("site_grabber.detect_size_from_context", return_value=(None, None)):
+            res = self.client.post("/admin/api/import", json={"url": "https://my-own-site.com/movies/mystery"})
+            self.assertEqual(res.status_code, 200)
+            preview = res.get_json()["preview"]
+            options = preview.get("download_options", [])
+            self.assertEqual(len(options), 1)
+            # Size must be None and not guessed
+            self.assertIsNone(options[0]["size"])
+            self.assertIsNone(options[0]["size_bytes"])
+
+    # -----------------------------------------------------------------------
+    # 12. Head Request Size Fallback
+    # -----------------------------------------------------------------------
+    @patch("requests.head")
+    def test_12_head_request_size_fallback(self, mock_head):
+        mock_response = MagicMock()
+        mock_response.headers = {"Content-Length": "1288490188"}  # 1.2 GB
+        mock_head.return_value = mock_response
+
+        size_str, size_bytes = site_grabber.detect_size_from_context(None, "https://my-own-site.com/dl/file.mkv", fetch_head=True)
+        self.assertEqual(size_str, "1.2 GB")
+        self.assertEqual(size_bytes, 1288490188)
 
 if __name__ == "__main__":
     unittest.main()

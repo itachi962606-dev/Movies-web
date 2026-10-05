@@ -133,7 +133,7 @@ def api_update(movie_id):
     movie = movies[idx]
 
     # Update only provided fields
-    updatable = ["title", "poster", "description", "year", "genre", "download_url", "source_url"]
+    updatable = ["title", "poster", "description", "year", "genre", "download_url", "download_options", "source_url"]
     for field in updatable:
         if field in data:
             movie[field] = str(data[field]).strip() if isinstance(data[field], str) else data[field]
@@ -210,8 +210,9 @@ def api_import():
     except Exception as e:
         return jsonify({"error": f"Scrape failed: {str(e)}"}), 500
 
-    # Get download URL from scraper result or fallback inspection
+    # Get download URL and options from scraper result
     download_url = result.get("download_url") or _find_download_url(url, selectors)
+    download_options = result.get("download_options") or []
 
     genre = result.get("genre", [])
     if isinstance(genre, list):
@@ -224,6 +225,7 @@ def api_import():
         "year": result.get("release_year") or "",
         "genre": genre,
         "download_url": download_url or "",
+        "download_options": download_options,
         "source_url": url,
         "source": "own-site",
     }
@@ -233,14 +235,11 @@ def api_import():
 
 def _find_download_url(page_url, selectors):
     """
-    Attempt to find a download link on the scraped page.
-    Uses 'download_link' selector from config if present,
-    otherwise applies common heuristics.
+    Attempt to find download options on the scraped page using site_grabber.
     Returns URL string or None.
     """
-    import requests as req
+    import site_grabber
     from bs4 import BeautifulSoup
-    from urllib.parse import urljoin
 
     download_selector = selectors.get(
         "download_link",
@@ -249,12 +248,11 @@ def _find_download_url(page_url, selectors):
     )
 
     try:
-        import site_grabber
-        from bs4 import BeautifulSoup
         html = site_grabber.fetch_html(page_url)
         if html:
             soup = BeautifulSoup(html, "html.parser")
-            return site_grabber.extract_download_url(soup, page_url, download_selector)
+            options, primary_url = site_grabber.extract_all_download_options(soup, page_url, download_selector)
+            return primary_url
     except Exception:
         pass
 
@@ -302,6 +300,7 @@ def api_import_save():
         "year": data.get("year", ""),
         "genre": (data.get("genre") or "").strip(),
         "download_url": (data.get("download_url") or "").strip(),
+        "download_options": data.get("download_options") or [],
         "source_url": source_url,
     }
 

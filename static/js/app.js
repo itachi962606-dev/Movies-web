@@ -258,6 +258,10 @@ function buildTamilCard(movie) {
   card.className = "movie-card";
   card.dataset.id = id;
   card.dataset.source = "admin";
+  const effectiveDl = (movie.download_options && movie.download_options.length > 0 && movie.download_options[0].url)
+    ? movie.download_options[0].url
+    : movie.download_url;
+
   card.innerHTML = `
     ${poster
       ? `<img class="movie-card-poster" src="${escHtml(poster)}" alt="${escHtml(movie.title)}" loading="lazy">`
@@ -270,8 +274,8 @@ function buildTamilCard(movie) {
       </div>
     </div>
     <div class="movie-card-overlay">
-      ${movie.download_url
-        ? `<a href="${escHtml(movie.download_url)}" class="btn btn-accent btn-sm" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">⬇ Download</a>`
+      ${effectiveDl
+        ? `<a href="${escHtml(effectiveDl)}" class="btn btn-accent btn-sm" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">⬇ Download</a>`
         : `<span class="btn btn-secondary btn-sm" style="opacity:0.6;cursor:default;">No Link</span>`}
       <a href="/tamil/${escHtml(id)}" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">Details</a>
     </div>

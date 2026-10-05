@@ -354,7 +354,21 @@ function renderImportPreview(prev) {
   if (descEl) descEl.textContent = prev.description || "No description extracted.";
 
   if (dlEl && dlWarn) {
-    if (prev.download_url) {
+    if (prev.download_options && prev.download_options.length > 0) {
+      let optionsHtml = `<div style="margin-top:0.75rem;"><strong style="color:var(--text); font-size:0.85rem;">Available Qualities (Smallest File Selected):</strong><ul style="margin-top:0.5rem; display:flex; flex-direction:column; gap:0.4rem; padding:0; list-style:none;">`;
+      prev.download_options.forEach(opt => {
+        const sizeDisplay = opt.size ? ` — <strong>${escapeHtml(opt.size)}</strong>` : " — <span style='opacity:0.6;'>(Size unavailable)</span>";
+        optionsHtml += `
+          <li style="display:flex; align-items:center; justify-content:space-between; background:var(--surface); padding:8px 12px; border-radius:4px; border:1px solid var(--border); font-size:0.85rem;">
+            <span><span style="color:var(--accent); font-weight:700;">${escapeHtml(opt.quality)}</span>${sizeDisplay}</span>
+            <a href="${encodeURI(opt.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding:3px 10px; font-size:0.75rem;">⬇ Download</a>
+          </li>
+        `;
+      });
+      optionsHtml += `</ul></div>`;
+      dlEl.innerHTML = optionsHtml;
+      dlWarn.style.display = "none";
+    } else if (prev.download_url) {
       dlEl.innerHTML = `<strong>Download URL:</strong> <a href="${encodeURI(prev.download_url)}" target="_blank" style="color:var(--accent);">${escapeHtml(prev.download_url)}</a>`;
       dlWarn.style.display = "none";
     } else {

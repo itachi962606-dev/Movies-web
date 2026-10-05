@@ -114,8 +114,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         ? `<img class="movie-card-poster" src="${window.MH.escHtml(m.poster)}" alt="${window.MH.escHtml(m.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'movie-card-poster-placeholder\\'>🎬</div>'">`
         : `<div class="movie-card-poster-placeholder">🎬</div>`;
 
-      const downloadAction = m.download_url
-        ? `<a href="${window.MH.escHtml(m.download_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-accent btn-sm" onclick="event.stopPropagation()">⬇ DOWNLOAD</a>`
+      const effectiveDl = (m.download_options && m.download_options.length > 0 && m.download_options[0].url)
+        ? m.download_options[0].url
+        : m.download_url;
+
+      const downloadAction = effectiveDl
+        ? `<a href="${window.MH.escHtml(effectiveDl)}" target="_blank" rel="noopener noreferrer" class="btn btn-accent btn-sm" onclick="event.stopPropagation()">⬇ DOWNLOAD</a>`
         : `<span class="btn btn-secondary btn-sm" style="opacity:0.6; cursor:default;" onclick="event.stopPropagation()">Download link unavailable</span>`;
 
       card.innerHTML = `
