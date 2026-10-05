@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}MoviesHub - Stream & Download{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <!-- Global Navbar -->
+  <nav class="navbar" id="main-nav">
+    <a href="/" class="nav-logo">Movies<span>Hub</span></a>
+
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/movies">International Movies</a>
+      <a href="/tamil">Tamil Movies</a>
+      <a href="/watchlist">Watchlist</a>
+      <a href="/admin">Admin</a>
+    </div>
+
+    <div class="nav-actions">
+      <!-- Best List Icon (User Requirement: icon instead of text) -->
+      <a href="/bestlist" class="bestlist-btn" title="Best List" aria-label="Best List">⭐</a>
+      <!-- Search Trigger -->
+      <button class="nav-search-btn" id="nav-search-btn" title="Search" aria-label="Search">🔍</button>
+      <!-- Mobile Hamburger -->
+      <button class="nav-hamburger" id="nav-hamburger" aria-label="Toggle navigation">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Navigation Overlay -->
+  <div class="nav-mobile" id="nav-mobile">
+    <button class="nav-mobile-close" id="nav-mobile-close" aria-label="Close menu">&times;</button>
+    <a href="/">Home</a>
+    <a href="/movies">International Movies</a>
+    <a href="/tamil">Tamil Movies</a>
+    <a href="/bestlist">⭐ Best List</a>
+    <a href="/watchlist">❤️ Watchlist</a>
+    <a href="/admin">⚙️ Admin</a>
+  </div>
+
+  <!-- Search Modal Overlay -->
+  <div class="search-overlay" id="search-overlay">
+    <button class="search-overlay-close" id="search-overlay-close">&times;</button>
+    <form class="search-box" id="search-form">
+      <input type="text" id="search-input" placeholder="Search international movies..." autocomplete="off">
+      <button type="submit">Search</button>
+    </form>
+  </div>
+
+  <!-- Main Content Block -->
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Global Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 MoviesHub. Clean catalogue of International & Tamil movies.</p>
+    <p style="margin-top: 0.5rem; opacity: 0.7;">International movie catalogue powered by API. Tamil movies managed independently.</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

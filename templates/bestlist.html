@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Best List - MoviesHub{% endblock %}
+
+{% block content %}
+<header class="page-hero">
+  <h1>⭐ Best List</h1>
+  <p>Your hand-picked hall of fame and top-tier all-time favorites.</p>
+</header>
+
+<section class="section" style="padding-top: 0;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding: 0 5%;">
+    <span id="bl-count-label" style="color:var(--text-muted); font-size: 0.9rem;">0 Movies in Best List</span>
+    <button id="btn-clear-bl" class="btn btn-outline btn-sm" style="color: #f87171; border-color: rgba(248,113,113,0.3);">Clear All</button>
+  </div>
+
+  <div id="bestlist-container" class="bestlist-grid">
+    <!-- Populated by JavaScript -->
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const container = document.getElementById("bestlist-container");
+  const countLabel = document.getElementById("bl-count-label");
+  const clearBtn = document.getElementById("btn-clear-bl");
+
+  function renderBestList() {
+    const list = window.MH.loadBestList();
+    countLabel.textContent = `${list.length} ${list.length === 1 ? 'Movie' : 'Movies'} in Best List`;
+
+    if (list.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <div class="empty-icon">⭐</div>
+          <h3>Your Best List is Empty</h3>
+          <p>Highlight your highest rated cinema and top favorites by adding them to your Best List.</p>
+          <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
+            <a href="/movies" class="btn btn-primary">Discover Movies</a>
+          </div>
+        </div>
+      `;
+      clearBtn.style.display = "none";
+      return;
+    }
+
+    clearBtn.style.display = "inline-flex";
+    container.innerHTML = "";
+
+    list.forEach((m, idx) => {
+      const card = document.createElement("div");
+      card.className = "bestlist-card";
+
+      const posterSrc = window.MH.posterUrl(m.poster);
+      const posterHtml = posterSrc
+        ? `<img class="bestlist-img" src="${window.MH.escHtml(posterSrc)}" alt="${window.MH.escHtml(m.title)}">`
+        : `<div class="movie-thumb-placeholder" style="width:60px; height:90px;">🎬</div>`;
+
+      const detailUrl = m.source === "admin" ? `/tamil/${m.id}` : `/movies/${m.id}`;
+
+      card.innerHTML = `
+        <div class="bestlist-rank">#${idx + 1}</div>
+        ${posterHtml}
+        <div class="bestlist-info">
+          <h3>${window.MH.escHtml(m.title)}</h3>
+          <p>${window.MH.escHtml(m.year || "N/A")} • ${m.source === 'admin' ? 'Tamil' : 'International'}</p>
+          <div style="margin-top: 0.5rem; display:flex; gap:0.4rem;">
+            <a href="${detailUrl}" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size:0.75rem;">View</a>
+            <button class="btn btn-danger btn-sm btn-rm-bl" style="padding: 2px 8px; font-size:0.75rem;">Remove</button>
+          </div>
+        </div>
+      `;
+
+      const rmBtn = card.querySelector(".btn-rm-bl");
+      rmBtn.addEventListener("click", () => {
+        window.MH.toggleBestList(m, m.source);
+        renderBestList();
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  clearBtn.addEventListener("click", () => {
+    if (confirm("Clear your entire Best List?")) {
+      window.MH.saveBestList([]);
+      renderBestList();
+    }
+  });
+
+  renderBestList();
+});
+</script>
+{% endblock %}

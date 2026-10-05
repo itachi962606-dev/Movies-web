@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}My Watchlist - MoviesHub{% endblock %}
+
+{% block content %}
+<header class="page-hero">
+  <h1>My Watchlist</h1>
+  <p>Movies you saved to watch later. Stored securely in your browser's local storage.</p>
+</header>
+
+<section class="section" style="padding-top: 0;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <span id="wl-count-label" style="color:var(--text-muted); font-size: 0.9rem;">0 Movies in Watchlist</span>
+    <button id="btn-clear-wl" class="btn btn-outline btn-sm" style="color: #f87171; border-color: rgba(248,113,113,0.3);">Clear All</button>
+  </div>
+
+  <div id="watchlist-grid" class="movies-grid">
+    <!-- Populated by JavaScript -->
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const grid = document.getElementById("watchlist-grid");
+  const countLabel = document.getElementById("wl-count-label");
+  const clearBtn = document.getElementById("btn-clear-wl");
+
+  function renderWatchlist() {
+    const list = window.MH.loadWatchlist();
+    countLabel.textContent = `${list.length} ${list.length === 1 ? 'Movie' : 'Movies'} in Watchlist`;
+
+    if (list.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <div class="empty-icon">❤️</div>
+          <h3>Your Watchlist is Empty</h3>
+          <p>Explore international or Tamil movies and tap the heart icon to save them here.</p>
+          <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
+            <a href="/movies" class="btn btn-primary">Browse International</a>
+            <a href="/tamil" class="btn btn-secondary">Browse Tamil</a>
+          </div>
+        </div>
+      `;
+      clearBtn.style.display = "none";
+      return;
+    }
+
+    clearBtn.style.display = "inline-flex";
+    grid.innerHTML = "";
+
+    list.forEach(m => {
+      const card = document.createElement("div");
+      card.className = "movie-card";
+
+      const posterSrc = window.MH.posterUrl(m.poster);
+      const posterHtml = posterSrc
+        ? `<img class="movie-card-poster" src="${window.MH.escHtml(posterSrc)}" alt="${window.MH.escHtml(m.title)}" loading="lazy">`
+        : `<div class="movie-card-poster-placeholder">🎬</div>`;
+
+      const detailUrl = m.source === "admin" ? `/tamil/${m.id}` : `/movies/${m.id}`;
+
+      card.innerHTML = `
+        ${posterHtml}
+        <button class="wl-btn active" title="Remove from Watchlist" style="opacity:1;">❤️</button>
+        <div class="movie-card-body">
+          <div class="movie-card-title">${window.MH.escHtml(m.title)}</div>
+          <div class="movie-card-meta">
+            <span>${window.MH.escHtml(m.year || "")}</span>
+            <span>${m.source === 'admin' ? 'Tamil' : 'TMDB'}</span>
+          </div>
+        </div>
+        <div class="movie-card-overlay">
+          <a href="${detailUrl}" class="btn btn-primary btn-sm">View Details</a>
+        </div>
+      `;
+
+      // Remove from watchlist click
+      const rmBtn = card.querySelector(".wl-btn");
+      rmBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        window.MH.toggleWatchlist(m, m.source);
+        renderWatchlist();
+      });
+
+      card.addEventListener("click", () => {
+        window.location.href = detailUrl;
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  clearBtn.addEventListener("click", () => {
+    if (confirm("Clear your entire watchlist?")) {
+      window.MH.saveWatchlist([]);
+      renderWatchlist();
+    }
+  });
+
+  renderWatchlist();
+});
+</script>
+{% endblock %}

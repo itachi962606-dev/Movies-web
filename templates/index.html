@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}MoviesHub - Home{% endblock %}
+
+{% block content %}
+<!-- Hero Section (Netflix-style featured banner) -->
+<section class="hero" id="home-hero">
+  <div class="hero-slides">
+    <div class="hero-slide active" style="background-image: linear-gradient(135deg, #1f1f1f 0%, #0d0d0d 100%);"></div>
+  </div>
+  <div class="hero-gradient"></div>
+  
+  <div class="hero-content">
+    <span class="hero-badge">Featured Movie</span>
+    <h1 class="hero-title" id="hero-title">Loading Featured...</h1>
+    <div class="hero-meta">
+      <span class="hero-rating" id="hero-rating">★ 8.5</span>
+      <span class="hero-year" id="hero-year">2026</span>
+      <span>International</span>
+    </div>
+    <p class="hero-desc" id="hero-desc">Discover the top trending films curated for you. Explore international blockbusters and download exclusive Tamil releases.</p>
+    <div class="hero-btns">
+      <a href="/movies" id="hero-detail-btn" class="btn btn-primary">ℹ️ More Info</a>
+      <button id="hero-wl-btn" class="btn btn-secondary">❤️ Watchlist</button>
+    </div>
+  </div>
+
+  <div class="hero-dots"></div>
+</section>
+
+<!-- Trending International Movies Carousel -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Trending This Week</h2>
+    <a href="/movies" class="section-link">View All &rarr;</a>
+  </div>
+  <div class="carousel-wrap" id="wrap-trending">
+    <button class="carousel-arrow left" aria-label="Scroll left">&#8249;</button>
+    <div class="carousel" id="carousel-trending">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <button class="carousel-arrow right" aria-label="Scroll right">&#8250;</button>
+  </div>
+</section>
+
+<!-- Exclusive Tamil Movies Carousel (from admin_tamil_movies.json ONLY) -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Exclusive Tamil Movies</h2>
+    <a href="/tamil" class="section-link">Explore Tamil Catalogue &rarr;</a>
+  </div>
+  <div class="carousel-wrap" id="wrap-tamil">
+    <button class="carousel-arrow left" aria-label="Scroll left">&#8249;</button>
+    <div class="carousel" id="carousel-tamil">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <button class="carousel-arrow right" aria-label="Scroll right">&#8250;</button>
+  </div>
+</section>
+
+<!-- Popular International Movies Carousel -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Popular International</h2>
+    <a href="/movies" class="section-link">View All &rarr;</a>
+  </div>
+  <div class="carousel-wrap" id="wrap-popular">
+    <button class="carousel-arrow left" aria-label="Scroll left">&#8249;</button>
+    <div class="carousel" id="carousel-popular">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <button class="carousel-arrow right" aria-label="Scroll right">&#8250;</button>
+  </div>
+</section>
+
+<!-- Top Rated International Movies Carousel -->
+<section class="section">
+  <div class="section-header">
+    <h2 class="section-title">Top Rated Classics</h2>
+    <a href="/movies" class="section-link">View All &rarr;</a>
+  </div>
+  <div class="carousel-wrap" id="wrap-top-rated">
+    <button class="carousel-arrow left" aria-label="Scroll left">&#8249;</button>
+    <div class="carousel" id="carousel-top-rated">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <button class="carousel-arrow right" aria-label="Scroll right">&#8250;</button>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  // 1. Fetch featured for hero
+  try {
+    const res = await fetch("/api/movies/featured");
+    const featured = await res.json();
+    if (featured && featured.length) {
+      window.MH.initHero(featured);
+      // Also populate trending carousel
+      const wrapTrending = document.getElementById("wrap-trending");
+      window.MH.renderCarousel(wrapTrending, featured, window.MH.buildTmdbCard);
+    }
+  } catch (err) {
+    console.error("Failed to load featured:", err);
+  }
+
+  // 2. Fetch popular
+  try {
+    const res = await fetch("/api/movies/popular");
+    const popular = await res.json();
+    const wrapPopular = document.getElementById("wrap-popular");
+    if (popular && popular.length) {
+      window.MH.renderCarousel(wrapPopular, popular, window.MH.buildTmdbCard);
+    } else {
+      wrapPopular.innerHTML = '<p style="color:var(--text-muted); padding:1rem;">No popular movies loaded.</p>';
+    }
+  } catch (err) {
+    console.error("Failed to load popular:", err);
+  }
+
+  // 3. Fetch top rated
+  try {
+    const res = await fetch("/api/movies/top-rated");
+    const topRated = await res.json();
+    const wrapTop = document.getElementById("wrap-top-rated");
+    if (topRated && topRated.length) {
+      window.MH.renderCarousel(wrapTop, topRated, window.MH.buildTmdbCard);
+    } else {
+      wrapTop.innerHTML = '<p style="color:var(--text-muted); padding:1rem;">No top rated movies loaded.</p>';
+    }
+  } catch (err) {
+    console.error("Failed to load top rated:", err);
+  }
+
+  // 4. Fetch Tamil Movies (from /api/tamil-movies ONLY)
+  try {
+    const res = await fetch("/api/tamil-movies");
+    const tamilMovies = await res.json();
+    const wrapTamil = document.getElementById("wrap-tamil");
+    const track = document.getElementById("carousel-tamil");
+
+    if (tamilMovies && tamilMovies.length > 0) {
+      window.MH.renderCarousel(wrapTamil, tamilMovies, window.MH.buildTamilCard);
+    } else {
+      track.innerHTML = `
+        <div style="padding: 2rem 1rem; color: var(--text-muted);">
+          No Tamil movies added yet. <a href="/admin/add-movie" style="color:var(--primary); font-weight:600;">Add via Admin</a>.
+        </div>
+      `;
+    }
+  } catch (err) {
+    console.error("Failed to load Tamil movies:", err);
+  }
+});
+</script>
+{% endblock %}

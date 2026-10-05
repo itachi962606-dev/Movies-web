@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Admin Panel - MoviesHub{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚙️</text></svg>">
+</head>
+<body>
+  <!-- Admin Sidebar -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-logo">Movies<span>Hub</span> <small style="font-size:0.6rem; color:var(--accent); display:block;">ADMIN CONSOLE</small></div>
+
+    <div class="sidebar-label">Catalog Management</div>
+    <nav class="sidebar-nav">
+      <a href="/admin" class="sidebar-link {% if request.path == '/admin' or request.path == '/admin/' %}active{% endif %}">
+        <i>📊</i> Dashboard
+      </a>
+      <a href="/admin/movies" class="sidebar-link {% if request.path == '/admin/movies' %}active{% endif %}">
+        <i>🎬</i> Tamil Movies
+      </a>
+      <a href="/admin/add-movie" class="sidebar-link {% if request.path == '/admin/add-movie' %}active{% endif %}">
+        <i>➕</i> Add Tamil Movie
+      </a>
+      <a href="/admin/import" class="sidebar-link {% if request.path == '/admin/import' %}active{% endif %}">
+        <i>🌐</i> Import from Website
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="/" target="_blank">&larr; Return to Public Website</a>
+    </div>
+  </aside>
+
+  <!-- Admin Main Area -->
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+      <div class="topbar-actions">
+        <a href="/tamil" target="_blank" class="btn btn-secondary btn-sm">Preview Tamil Site ↗</a>
+        <a href="/admin/add-movie" class="btn btn-primary btn-sm">+ Add Movie</a>
+      </div>
+    </header>
+
+    <div class="admin-body">
+      <!-- Global alert toast -->
+      <div id="admin-alert" class="alert"></div>
+
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

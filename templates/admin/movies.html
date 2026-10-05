@@ -1,0 +1,44 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Manage Tamil Movies - MoviesHub Admin{% endblock %}
+{% block page_title %}Tamil Movies Catalogue{% endblock %}
+
+{% block content %}
+<div class="table-wrap">
+  <div class="table-header">
+    <div>
+      <h2>All Verified Tamil Movies</h2>
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Stored in <code>data/admin_tamil_movies.json</code></p>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+      <a href="/admin/add-movie" class="btn btn-primary btn-sm">+ Add Manually</a>
+      <a href="/admin/import" class="btn btn-accent btn-sm">🌐 Import Site</a>
+    </div>
+  </div>
+
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Poster</th>
+        <th>Title & Genre</th>
+        <th>Year</th>
+        <th>Source</th>
+        <th>Download Link</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="admin-movies-tbody">
+      <tr class="loading-row"><td colspan="7">Loading Tamil movies...</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  loadAdminMoviesTable();
+});
+</script>
+{% endblock %}

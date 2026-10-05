@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Tamil Movies - MoviesHub{% endblock %}
+
+{% block content %}
+<header class="page-hero tamil-hero">
+  <h1><span>Tamil</span> Movies</h1>
+  <p>Exclusive Tamil releases and verified direct downloads. Added and curated directly via our verified catalogue.</p>
+</header>
+
+<!-- Filter Toolbar for Tamil Movies -->
+<section class="filters-bar">
+  <input type="text" id="tamil-search" class="filter-input" placeholder="Search Tamil movie title or keywords...">
+  <select id="tamil-genre" class="filter-select">
+    <option value="">All Genres</option>
+  </select>
+  <select id="tamil-year" class="filter-select">
+    <option value="">All Years</option>
+  </select>
+  <button id="btn-tamil-filter" class="btn btn-primary btn-sm">Filter</button>
+  <button id="btn-tamil-reset" class="btn btn-outline btn-sm">Reset</button>
+</section>
+
+<!-- Tamil Movies Grid -->
+<section class="section" style="padding-top: 0;">
+  <div id="tamil-container" class="movies-grid">
+    <div class="loading"><div class="spinner"></div></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const container = document.getElementById("tamil-container");
+  const searchInput = document.getElementById("tamil-search");
+  const genreSelect = document.getElementById("tamil-genre");
+  const yearSelect = document.getElementById("tamil-year");
+  const filterBtn = document.getElementById("btn-tamil-filter");
+  const resetBtn = document.getElementById("btn-tamil-reset");
+
+  let allTamilMovies = [];
+
+  async function loadTamilMovies() {
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    try {
+      const res = await fetch("/api/tamil-movies");
+      allTamilMovies = await res.json();
+
+      // Populate filter dropdowns dynamically from available Tamil data
+      populateFilters(allTamilMovies);
+      renderGrid(allTamilMovies);
+    } catch (err) {
+      container.innerHTML = `
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <p style="color:#f87171;">Could not load Tamil movies: ${err.message}</p>
+        </div>
+      `;
+    }
+  }
+
+  function populateFilters(movies) {
+    const genres = new Set();
+    const years = new Set();
+
+    movies.forEach(m => {
+      if (m.genre) {
+        m.genre.split(",").map(g => g.trim()).filter(Boolean).forEach(g => genres.add(g));
+      }
+      if (m.year) {
+        years.add(String(m.year).trim());
+      }
+    });
+
+    genreSelect.innerHTML = '<option value="">All Genres</option>';
+    [...genres].sort().forEach(g => {
+      const opt = document.createElement("option");
+      opt.value = g.toLowerCase();
+      opt.textContent = g;
+      genreSelect.appendChild(opt);
+    });
+
+    yearSelect.innerHTML = '<option value="">All Years</option>';
+    [...years].sort().reverse().forEach(y => {
+      const opt = document.createElement("option");
+      opt.value = y;
+      opt.textContent = y;
+      yearSelect.appendChild(opt);
+    });
+  }
+
+  function renderGrid(movies) {
+    container.innerHTML = "";
+
+    if (!movies || movies.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state" style="grid-column: 1 / -1;">
+          <div class="empty-icon">🎬</div>
+          <h3>No Tamil Movies Found</h3>
+          <p>No Tamil movies match your query or none have been added yet.</p>
+          <a href="/admin/add-movie" class="btn btn-primary" style="margin-top:1rem;">Add via Admin</a>
+        </div>
+      `;
+      return;
+    }
+
+    movies.forEach(m => {
+      // Build pure Tamil card: Poster, Title, Year, Genre, Description, Action: DOWNLOAD ONLY
+      const card = document.createElement("div");
+      card.className = "movie-card";
+      card.dataset.id = m.id;
+
+      const posterHtml = m.poster
+        ? `<img class="movie-card-poster" src="${window.MH.escHtml(m.poster)}" alt="${window.MH.escHtml(m.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'movie-card-poster-placeholder\\'>🎬</div>'">`
+        : `<div class="movie-card-poster-placeholder">🎬</div>`;
+
+      const downloadAction = m.download_url
+        ? `<a href="${window.MH.escHtml(m.download_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-accent btn-sm" onclick="event.stopPropagation()">⬇ DOWNLOAD</a>`
+        : `<span class="btn btn-secondary btn-sm" style="opacity:0.6; cursor:default;" onclick="event.stopPropagation()">Download link unavailable</span>`;
+
+      card.innerHTML = `
+        ${posterHtml}
+        <div class="movie-card-body">
+          <div class="movie-card-title">${window.MH.escHtml(m.title)}</div>
+          <div class="movie-card-meta">
+            <span>${window.MH.escHtml(m.year || "")}</span>
+            <span>${window.MH.escHtml(m.genre || "")}</span>
+          </div>
+          ${m.description ? `<p style="font-size:0.75rem; color:rgba(229,229,229,0.7); margin-top:4px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.MH.escHtml(m.description)}</p>` : ""}
+        </div>
+        <div class="movie-card-overlay">
+          ${downloadAction}
+          <a href="/tamil/${m.id}" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">Details</a>
+        </div>
+      `;
+
+      card.addEventListener("click", () => {
+        window.location.href = `/tamil/${m.id}`;
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  function applyFilters() {
+    const q = searchInput.value.trim().toLowerCase();
+    const g = genreSelect.value.trim().toLowerCase();
+    const y = yearSelect.value.trim();
+
+    const filtered = allTamilMovies.filter(m => {
+      const matchQ = !q || (m.title && m.title.toLowerCase().includes(q)) || (m.description && m.description.toLowerCase().includes(q));
+      const matchG = !g || (m.genre && m.genre.toLowerCase().includes(g));
+      const matchY = !y || (String(m.year) === y);
+      return matchQ && matchG && matchY;
+    });
+
+    renderGrid(filtered);
+  }
+
+  filterBtn.addEventListener("click", applyFilters);
+  searchInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") applyFilters();
+  });
+  resetBtn.addEventListener("click", () => {
+    searchInput.value = "";
+    genreSelect.value = "";
+    yearSelect.value = "";
+    renderGrid(allTamilMovies);
+  });
+
+  loadTamilMovies();
+});
+</script>
+{% endblock %}

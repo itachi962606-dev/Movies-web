@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}{{ movie.title }} - Tamil Movie - MoviesHub{% endblock %}
+
+{% block content %}
+<div class="detail-wrap">
+  <!-- Top header banner -->
+  <div class="detail-backdrop" style="background: linear-gradient(135deg, #180d24 0%, #0d0d0d 100%);">
+    <div class="detail-backdrop-grad"></div>
+  </div>
+
+  <div class="detail-content">
+    <div class="detail-poster">
+      {% if movie.poster %}
+        <img src="{{ movie.poster }}" alt="{{ movie.title }}" onerror="this.outerHTML='<div class=\'movie-card-poster-placeholder\' style=\'height:330px; font-size:4rem;\'>🎬</div>'">
+      {% else %}
+        <div class="movie-card-poster-placeholder" style="height:330px; font-size:4rem;">🎬</div>
+      {% endif %}
+    </div>
+
+    <div class="detail-info">
+      <h1 class="detail-title">{{ movie.title }}</h1>
+
+      <div class="detail-tags">
+        <span class="tag" style="background:rgba(167,139,250,0.2); color:#c4b5fd; border-color:rgba(167,139,250,0.4);">Tamil Cinema</span>
+        {% if movie.year %}
+          <span class="tag">Year: {{ movie.year }}</span>
+        {% endif %}
+        {% if movie.genre %}
+          <span class="tag">Genre: {{ movie.genre }}</span>
+        {% endif %}
+        <span class="tag">Source: {{ 'Imported' if movie.source == 'own-site' else 'Verified Admin' }}</span>
+      </div>
+
+      <p class="detail-desc">
+        {{ movie.description if movie.description else 'No synopsis provided for this Tamil release.' }}
+      </p>
+
+      <div class="detail-actions" style="margin-top: 2rem;">
+        {% if movie.download_url %}
+          <a href="{{ movie.download_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-accent btn-lg" style="font-size:1.1rem; padding: 0.9rem 2.2rem;">
+            ⬇ DOWNLOAD NOW
+          </a>
+        {% else %}
+          <button class="btn btn-secondary btn-lg" disabled style="opacity: 0.6; cursor: not-allowed;">
+            Download link unavailable
+          </button>
+        {% endif %}
+
+        <button id="btn-tamil-wl" class="btn btn-secondary">❤️ Watchlist</button>
+        <button id="btn-tamil-bl" class="btn btn-secondary">⭐ Best List</button>
+        <a href="/tamil" class="btn btn-outline">&larr; Back to Tamil Movies</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const movie = {
+    id: "{{ movie.id }}",
+    title: "{{ movie.title }}",
+    poster: "{{ movie.poster }}",
+    year: "{{ movie.year }}",
+    source: "admin"
+  };
+
+  const wlBtn = document.getElementById("btn-tamil-wl");
+  const blBtn = document.getElementById("btn-tamil-bl");
+
+  function updateWl() {
+    const active = window.MH.isInWatchlist(movie.id, "admin");
+    wlBtn.innerHTML = active ? "❤️ In Watchlist" : "🤍 Add to Watchlist";
+    wlBtn.className = active ? "btn btn-primary" : "btn btn-secondary";
+  }
+  updateWl();
+  wlBtn.addEventListener("click", () => {
+    window.MH.toggleWatchlist(movie, "admin");
+    updateWl();
+  });
+
+  function updateBl() {
+    const active = window.MH.isInBestList(movie.id, "admin");
+    blBtn.innerHTML = active ? "⭐ In Best List" : "☆ Add to Best List";
+    blBtn.className = active ? "btn btn-accent" : "btn btn-secondary";
+  }
+  updateBl();
+  blBtn.addEventListener("click", () => {
+    window.MH.toggleBestList(movie, "admin");
+    updateBl();
+  });
+});
+</script>
+{% endblock %}

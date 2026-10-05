@@ -1,0 +1,8 @@
+{
+  "title": "h1, .movie-title, meta[property='og:title']",
+  "poster_url": "img.poster, .poster img, meta[property='og:image']",
+  "release_year": ".year, .release-year, meta[property='og:release_date']",
+  "genre": ".genre a, .genres a, .genre, meta[property='og:video:tag']",
+  "description": ".plot, .description, meta[name='description'], meta[property='og:description']",
+  "download_link": "a[href*='download'], a.download-btn, a.download, .download-link a, a[download], button.download, a[href*='/download/']"
+}

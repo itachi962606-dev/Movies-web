@@ -1,0 +1,58 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Add Tamil Movie - MoviesHub Admin{% endblock %}
+{% block page_title %}Add Tamil Movie{% endblock %}
+
+{% block content %}
+<div class="form-card">
+  <h2 class="form-title">Manual Movie Entry</h2>
+  
+  <form id="add-movie-form">
+    <div class="form-group">
+      <label class="form-label" for="movie-title">Movie Title <span class="required">*</span></label>
+      <input type="text" id="movie-title" class="form-input" placeholder="e.g. Leo, Vikram, Jailer" required>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="movie-poster">Poster URL</label>
+      <input type="url" id="movie-poster" class="form-input" placeholder="https://example.com/poster.jpg">
+      <div class="form-hint">Direct link to the poster image (HTTPS recommended).</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+      <div class="form-group">
+        <label class="form-label" for="movie-year">Release Year</label>
+        <input type="text" id="movie-year" class="form-input" placeholder="2026">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="movie-genre">Genre(s)</label>
+        <input type="text" id="movie-genre" class="form-input" placeholder="Action, Thriller">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="movie-download">Download URL</label>
+      <input type="url" id="movie-download" class="form-input" placeholder="https://my-own-site.com/download/leo-1080p">
+      <div class="form-hint">Direct URL for the user Download button. No local file upload needed.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="movie-desc">Description / Synopsis</label>
+      <textarea id="movie-desc" class="form-textarea" placeholder="Brief movie description..."></textarea>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Add Movie</button>
+      <a href="/admin/movies" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  initAddMovieForm();
+});
+</script>
+{% endblock %}

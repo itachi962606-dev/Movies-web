@@ -1,0 +1,58 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Admin Dashboard - MoviesHub{% endblock %}
+{% block page_title %}Tamil Catalog Overview{% endblock %}
+
+{% block content %}
+<!-- Quick Stats Cards -->
+<div class="stats-grid">
+  <div class="stat-card accent">
+    <div class="stat-label">Total Tamil Movies</div>
+    <div class="stat-value" id="total-movies-count">-</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Manually Added</div>
+    <div class="stat-value" id="manual-movies-count">-</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Website Imported</div>
+    <div class="stat-value" id="imported-movies-count">-</div>
+  </div>
+</div>
+
+<!-- Quick Action Shortcuts -->
+<div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap;">
+  <a href="/admin/add-movie" class="btn btn-primary">➕ Add New Tamil Movie</a>
+  <a href="/admin/import" class="btn btn-accent">🌐 Import from Own Website</a>
+  <a href="/admin/movies" class="btn btn-secondary">📋 View Full List & Manage Links</a>
+</div>
+
+<!-- Recent Additions Table -->
+<div class="table-wrap">
+  <div class="table-header">
+    <h2>Recent Tamil Releases</h2>
+    <a href="/admin/movies" class="btn btn-secondary btn-sm">View All</a>
+  </div>
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Year</th>
+        <th>Source</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="admin-recent-tbody">
+      <tr class="loading-row"><td colspan="4">Loading recent entries...</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  loadAdminDashboardStats();
+});
+</script>
+{% endblock %}
