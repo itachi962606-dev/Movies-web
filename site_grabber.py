@@ -12,6 +12,7 @@ Requirements:
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -33,6 +34,35 @@ DEFAULT_SELECTORS = {
     "description": ".plot, .description, meta[name='description'], meta[property='og:description']",
     "download_link": "a[href*='download'], a.download-btn, a.download, .download-link a, a[download], a[href*='/download/']",
 }
+
+
+def get_domain(url: str) -> str:
+    """Extract clean domain/hostname from a URL."""
+    if not url:
+        return ""
+    if "://" not in url:
+        url = "https://" + url
+    parsed = urlparse(url)
+    return (parsed.hostname or "").lower()
+
+
+def is_own_domain(url: str, own_site_url: str | None = None) -> bool:
+    """
+    Verify if the given URL belongs to OWN_SITE_URL.
+    Matches hostname exactly or as a valid subdomain.
+    """
+    own = own_site_url or os.environ.get("OWN_SITE_URL", "").strip()
+    if not own:
+        # If no specific OWN_SITE_URL is defined, allow (permissive fallback)
+        return True
+
+    sub_domain = get_domain(url)
+    own_domain = get_domain(own)
+
+    if not sub_domain or not own_domain:
+        return False
+
+    return sub_domain == own_domain or sub_domain.endswith(f".{own_domain}")
 
 
 def allowed_by_robots(url: str) -> bool:
@@ -143,8 +173,15 @@ def extract_download_url(soup: BeautifulSoup, base_url: str, selector: str | Non
     return None
 
 
-def scrape(url: str, selectors: dict) -> dict:
+def scrape(url: str, selectors: dict, own_site_url: str | None = None) -> dict:
     """Scrape one page and return a structured dictionary."""
+    if not is_own_domain(url, own_site_url):
+        own = own_site_url or os.environ.get("OWN_SITE_URL", "")
+        raise PermissionError(
+            f"Security restriction: URL '{url}' does not belong to your verified domain ({own}). "
+            "Third-party websites are strictly disallowed."
+        )
+
     if not allowed_by_robots(url):
         raise PermissionError("robots.txt disallows scraping this URL.")
 

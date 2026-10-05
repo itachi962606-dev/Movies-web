@@ -68,7 +68,8 @@ def edit_movie_page(movie_id):
 
 @admin_bp.route("/import")
 def import_page():
-    return render_template("admin/import.html")
+    own_site_url = os.environ.get("OWN_SITE_URL", "").strip()
+    return render_template("admin/import.html", own_site_url=own_site_url)
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +183,15 @@ def api_import():
     except Exception as e:
         return jsonify({"error": f"Scraper unavailable: {str(e)}"}), 500
 
+    # 1 & 2: Verify domain belongs to OWN_SITE_URL; reject third-party websites
+    own_site_url = os.environ.get("OWN_SITE_URL", "").strip()
+    if own_site_url:
+        if not grabber.is_own_domain(url, own_site_url):
+            own_host = grabber.get_domain(own_site_url)
+            return jsonify({
+                "error": f"Security restriction: URL must belong to your verified domain ({own_host}). Scraping third-party movie websites is strictly prohibited."
+            }), 400
+
     # Load selectors from optional config
     selectors_path = os.path.join(os.path.dirname(__file__), "..", "data", "scraper_config.json")
     selectors = dict(grabber.DEFAULT_SELECTORS)
@@ -192,7 +202,7 @@ def api_import():
         pass  # Use defaults if no config
 
     try:
-        result = grabber.scrape(url, selectors)
+        result = grabber.scrape(url, selectors, own_site_url=own_site_url)
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except RuntimeError as e:

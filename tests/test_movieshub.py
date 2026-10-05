@@ -185,8 +185,9 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertIn("Movie C", remaining_titles)
 
     # -----------------------------------------------------------------------
-    # 6. Own Website Scraper & Import Confirmation Flow
+    # 6. Own Website Scraper & Import Confirmation Flow (Domain verification)
     # -----------------------------------------------------------------------
+    @patch.dict(os.environ, {"OWN_SITE_URL": "https://my-own-site.com"})
     @patch("site_grabber.allowed_by_robots", return_value=True)
     @patch("site_grabber.fetch_html")
     def test_06_site_grabber_and_import(self, mock_html, mock_robots):
@@ -209,7 +210,12 @@ class MoviesHubTestCase(unittest.TestCase):
         </html>
         """
 
-        # 1. Preview scrape
+        # 1. Domain verification: reject third-party URL
+        res_blocked = self.client.post("/admin/api/import", json={"url": "https://third-party-movies.com/movies/leo"})
+        self.assertEqual(res_blocked.status_code, 400, "Third-party website was not rejected!")
+        self.assertIn("Security restriction", res_blocked.get_json().get("error", ""))
+
+        # 2. Preview scrape with verified own-site URL
         res = self.client.post("/admin/api/import", json={"url": "https://my-own-site.com/movies/leo"})
         self.assertEqual(res.status_code, 200)
         data = res.get_json()
@@ -221,11 +227,11 @@ class MoviesHubTestCase(unittest.TestCase):
         self.assertIn("Action", preview["genre"])
         self.assertEqual(preview["download_url"], "https://my-own-site.com/download/leo-2023-1080p.mkv")
 
-        # 2. Confirm & save
+        # 3. Confirm & save
         res_save = self.client.post("/admin/api/import/save", json=preview)
         self.assertEqual(res_save.status_code, 201)
 
-        # 3. Duplicate prevention: try saving same movie again
+        # 4. Duplicate prevention: try saving same movie again
         res_dup = self.client.post("/admin/api/import/save", json=preview)
         self.assertEqual(res_dup.status_code, 409, "Duplicate movie was not rejected!")
 

@@ -10,14 +10,20 @@
     Inspects your own website using <code>site_grabber.py</code> to extract movie metadata and direct download links. Results are previewed before saving.
   </p>
 
+  {% if own_site_url %}
+  <div style="font-size:0.82rem; color:var(--accent); margin-bottom: 1.25rem; padding: 6px 12px; background: rgba(245,197,24,0.1); border: 1px solid rgba(245,197,24,0.25); border-radius: var(--radius); display: inline-flex; align-items: center; gap: 0.5rem;">
+    🔒 Authorized domain: <strong>{{ own_site_url }}</strong>
+  </div>
+  {% endif %}
+
   <form id="import-form">
     <div class="form-group">
       <label class="form-label" for="scrape-url">Movie Page URL <span class="required">*</span></label>
       <div style="display:flex; gap:0.5rem;">
-        <input type="url" id="scrape-url" class="form-input" placeholder="https://my-own-site.com/movies/sample-title" required style="flex:1;">
+        <input type="url" id="scrape-url" class="form-input" placeholder="{% if own_site_url %}{{ own_site_url }}/movies/sample-movie{% else %}https://MY-OWN-WEBSITE-DOMAIN.com/movies/sample-movie{% endif %}" required style="flex:1;">
         <button type="submit" id="btn-fetch-scrape" class="btn btn-primary" style="white-space:nowrap;">Inspect & Extract</button>
       </div>
-      <div class="form-hint">Only pages on your own website should be scraped. Respects robots.txt.</div>
+      <div class="form-hint">Only pages on your own website should be scraped. Third-party websites are strictly rejected.</div>
     </div>
   </form>
 
