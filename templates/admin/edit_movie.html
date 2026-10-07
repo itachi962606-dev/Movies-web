@@ -12,17 +12,51 @@
     </span>
   </div>
   
-  <form id="edit-movie-form">
+  <form id="edit-movie-form" data-movie-id="{{ movie.id }}">
     <div class="form-group">
       <label class="form-label" for="movie-title">Movie Title <span class="required">*</span></label>
       <input type="text" id="movie-title" class="form-input" value="{{ movie.title }}" required>
     </div>
 
-    <div class="form-group">
-      <label class="form-label" for="movie-poster">Poster URL</label>
-      <input type="url" id="movie-poster" class="form-input" value="{{ movie.poster }}">
-      <div class="form-hint">Direct link to poster image.</div>
+    <!-- Movie Poster Section (Cloudinary Upload + Manual URL) -->
+    <div class="form-group poster-upload-group">
+      <label class="form-label" for="movie-poster">Poster Image URL</label>
+      
+      {% set current_poster = movie.poster or movie.poster_url or '' %}
+      <div class="poster-upload-box">
+        <div class="poster-preview-container">
+          <img id="poster-preview-img" src="{{ current_poster }}" alt="Poster Preview" style="display: {{ 'block' if current_poster else 'none' }};">
+          <div id="poster-preview-placeholder" class="poster-preview-placeholder" style="display: {{ 'none' if current_poster else 'flex' }};">
+            <span style="font-size: 1.6rem;">🖼️</span>
+            <span>No Poster</span>
+          </div>
+        </div>
+        
+        <div class="poster-upload-controls">
+          <div class="upload-btn-row">
+            <label for="poster-file-input" class="btn btn-secondary btn-file">
+              📁 Choose Poster
+              <input type="file" id="poster-file-input" accept="image/png, image/jpeg, image/jpg, image/webp, image/gif" style="display:none;">
+            </label>
+            <button type="button" id="btn-upload-poster" class="btn btn-accent" disabled>
+              ☁️ Upload Image
+            </button>
+          </div>
+          <div id="poster-file-name" class="file-name-text">
+            {% if current_poster %}Current poster loaded (select new file to replace){% else %}No file chosen{% endif %}
+          </div>
+          <div id="upload-status" class="upload-status-text" style="display:none;"></div>
+          <div class="form-hint">Upload replacement image to Cloudinary (Max: 10MB; JPG, PNG, WEBP, GIF).</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 0.85rem;">
+        <label class="form-label" for="movie-poster" style="font-size:0.75rem; color:var(--text-muted);">Direct Poster Image URL</label>
+        <input type="url" id="movie-poster" name="poster_url" class="form-input" value="{{ current_poster }}">
+      </div>
     </div>
+
+
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
       <div class="form-group">

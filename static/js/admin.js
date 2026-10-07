@@ -142,11 +142,200 @@ async function loadAdminDashboardStats() {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Cloudinary Poster Upload Widget Setup
+// ---------------------------------------------------------------------------
+function setupPosterUploadWidget() {
+  const fileInput = document.getElementById("poster-file-input");
+  const uploadBtn = document.getElementById("btn-upload-poster");
+  const fileNameText = document.getElementById("poster-file-name");
+  const previewImg = document.getElementById("poster-preview-img");
+  const placeholder = document.getElementById("poster-preview-placeholder");
+  const statusEl = document.getElementById("upload-status");
+  const posterUrlInput = document.getElementById("movie-poster");
+
+  if (!fileInput || !uploadBtn) return;
+
+  let selectedFile = null;
+  let previousUrl = posterUrlInput ? posterUrlInput.value.trim() : "";
+
+  function setPreviewState(src) {
+    if (src && src.trim()) {
+      if (previewImg) {
+        previewImg.src = src.trim();
+        previewImg.style.display = "block";
+      }
+      if (placeholder) {
+        placeholder.style.display = "none";
+      }
+    } else {
+      if (previewImg) {
+        previewImg.style.display = "none";
+        previewImg.src = "";
+      }
+      if (placeholder) {
+        placeholder.style.display = "flex";
+      }
+    }
+  }
+
+  // 1. On page load: if poster input already has a URL (e.g. edit mode), display it
+  if (posterUrlInput && posterUrlInput.value.trim()) {
+    previousUrl = posterUrlInput.value.trim();
+    setPreviewState(previousUrl);
+  }
+
+  // 2. Immediate local preview when an image file is selected
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) {
+      selectedFile = null;
+      uploadBtn.disabled = true;
+      if (fileNameText) fileNameText.textContent = "No file chosen";
+      return;
+    }
+
+    // Validate client-side image type
+    if (!file.type.startsWith("image/")) {
+      showAdminAlert("Please choose a valid image file (JPG, PNG, WEBP, GIF).", "error");
+      fileInput.value = "";
+      selectedFile = null;
+      uploadBtn.disabled = true;
+      return;
+    }
+
+    // Validate client-side 10MB limit
+    if (file.size > 10 * 1024 * 1024) {
+      showAdminAlert("Image file exceeds 10MB limit.", "error");
+      fileInput.value = "";
+      selectedFile = null;
+      uploadBtn.disabled = true;
+      return;
+    }
+
+    selectedFile = file;
+    uploadBtn.disabled = false;
+    if (fileNameText) {
+      fileNameText.textContent = `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+    }
+
+    if (statusEl) {
+      statusEl.style.display = "flex";
+      statusEl.className = "upload-status-text";
+      statusEl.textContent = "Image selected. Click 'Upload Image' to upload to Cloudinary.";
+    }
+
+    // Show immediate local preview
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewState(objectUrl);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setPreviewState(ev.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // 3. Upload to Cloudinary when admin clicks "Upload Image"
+  uploadBtn.addEventListener("click", async () => {
+    if (!selectedFile) return;
+
+    uploadBtn.disabled = true;
+    fileInput.disabled = true;
+
+    if (statusEl) {
+      statusEl.style.display = "flex";
+      statusEl.className = "upload-status-text loading";
+      statusEl.innerHTML = `<span class="spinner"></span> Uploading to Cloudinary...`;
+    }
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res = await fetch("/admin/api/upload-poster", {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok && (data.secure_url || data.url)) {
+        const secureUrl = data.secure_url || data.url;
+        previousUrl = secureUrl;
+
+        // Auto-fill Poster Image URL input field
+        if (posterUrlInput) {
+          posterUrlInput.value = secureUrl;
+          posterUrlInput.dispatchEvent(new Event("input", { bubbles: true }));
+          posterUrlInput.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        // Keep and update preview to Cloudinary secure_url
+        setPreviewState(secureUrl);
+
+        if (statusEl) {
+          statusEl.className = "upload-status-text success";
+          statusEl.innerHTML = `✓ Uploaded successfully!`;
+          statusEl.style.display = "flex";
+        }
+        showAdminAlert("Poster uploaded to Cloudinary successfully!", "success");
+      } else {
+        const errMsg = data.error || "Upload failed.";
+        if (statusEl) {
+          statusEl.className = "upload-status-text error";
+          statusEl.innerHTML = `✗ ${errMsg}`;
+          statusEl.style.display = "flex";
+        }
+        showAdminAlert(errMsg, "error");
+        uploadBtn.disabled = false;
+
+        // Restore previous valid URL on error
+        if (posterUrlInput) {
+          posterUrlInput.value = previousUrl;
+        }
+        setPreviewState(previousUrl);
+      }
+    } catch (err) {
+      const errMsg = `Upload error: ${err.message}`;
+      if (statusEl) {
+        statusEl.className = "upload-status-text error";
+        statusEl.innerHTML = `✗ ${errMsg}`;
+        statusEl.style.display = "flex";
+      }
+      showAdminAlert(errMsg, "error");
+      uploadBtn.disabled = false;
+
+      // Restore previous valid URL on error
+      if (posterUrlInput) {
+        posterUrlInput.value = previousUrl;
+      }
+      setPreviewState(previousUrl);
+    } finally {
+      fileInput.disabled = false;
+    }
+  });
+
+  // 4. Update preview dynamically when manual URL input changes
+  if (posterUrlInput) {
+    posterUrlInput.addEventListener("input", () => {
+      const url = posterUrlInput.value.trim();
+      previousUrl = url;
+      setPreviewState(url);
+    });
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // Add Movie Form
 // ---------------------------------------------------------------------------
 function initAddMovieForm() {
   const form = document.getElementById("add-movie-form");
   if (!form) return;
+
+  setupPosterUploadWidget();
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -157,6 +346,7 @@ function initAddMovieForm() {
     const payload = {
       title: document.getElementById("movie-title").value.trim(),
       poster: document.getElementById("movie-poster").value.trim(),
+      poster_url: document.getElementById("movie-poster").value.trim(),
       description: document.getElementById("movie-desc").value.trim(),
       year: document.getElementById("movie-year").value.trim(),
       genre: document.getElementById("movie-genre").value.trim(),
@@ -197,6 +387,8 @@ function initEditMovieForm(movieId) {
   const form = document.getElementById("edit-movie-form");
   if (!form) return;
 
+  setupPosterUploadWidget();
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = form.querySelector("button[type='submit']");
@@ -206,6 +398,7 @@ function initEditMovieForm(movieId) {
     const payload = {
       title: document.getElementById("movie-title").value.trim(),
       poster: document.getElementById("movie-poster").value.trim(),
+      poster_url: document.getElementById("movie-poster").value.trim(),
       description: document.getElementById("movie-desc").value.trim(),
       year: document.getElementById("movie-year").value.trim(),
       genre: document.getElementById("movie-genre").value.trim(),
@@ -237,6 +430,7 @@ function initEditMovieForm(movieId) {
     }
   });
 }
+
 
 // ---------------------------------------------------------------------------
 // Import from Own Website
@@ -386,3 +580,33 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// ---------------------------------------------------------------------------
+// Auto-initialize on load (handles both early and late script execution)
+// ---------------------------------------------------------------------------
+function autoInitAdmin() {
+  if (document.getElementById("add-movie-form")) {
+    initAddMovieForm();
+  }
+  const editForm = document.getElementById("edit-movie-form");
+  if (editForm) {
+    const movieId = editForm.getAttribute("data-movie-id");
+    initEditMovieForm(movieId);
+  }
+  if (document.getElementById("admin-movies-tbody")) {
+    loadAdminMoviesTable();
+  }
+  if (document.getElementById("total-movies-count")) {
+    loadAdminDashboardStats();
+  }
+  if (document.getElementById("import-form")) {
+    initImportPage();
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", autoInitAdmin);
+} else {
+  autoInitAdmin();
+}
+

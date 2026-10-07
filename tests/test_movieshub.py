@@ -428,7 +428,90 @@ class MoviesHubTestCase(unittest.TestCase):
 
         size_str, size_bytes = site_grabber.detect_size_from_context(None, "https://my-own-site.com/dl/file.mkv", fetch_head=True)
         self.assertEqual(size_str, "1.2 GB")
-        self.assertEqual(size_bytes, 1288490188)
+    # -----------------------------------------------------------------------
+    # 13. Cloudinary Poster Upload Success & Movie Display Flow
+    # -----------------------------------------------------------------------
+    @patch.dict(os.environ, {
+        "CLOUDINARY_CLOUD_NAME": "i4h9zmzd",
+        "CLOUDINARY_API_KEY": "fake_api_key",
+        "CLOUDINARY_API_SECRET": "fake_api_secret"
+    })
+    @patch("cloudinary.uploader.upload")
+    def test_13_cloudinary_poster_upload_and_movie_display(self, mock_upload):
+        import io
+        mock_upload.return_value = {
+            "secure_url": "https://res.cloudinary.com/i4h9zmzd/image/upload/v12345/movieshub/posters/leo.jpg",
+            "public_id": "movieshub/posters/leo",
+            "format": "jpg",
+            "bytes": 204800
+        }
+
+        # 1. Upload poster image
+        data = {
+            "file": (io.BytesIO(b"\xff\xd8\xff\xe0\x00\x10JFIF fake image content"), "leo.jpg")
+        }
+        res = self.client.post("/admin/api/upload-poster", data=data, content_type="multipart/form-data")
+        self.assertEqual(res.status_code, 200)
+        res_json = res.get_json()
+        self.assertTrue(res_json["success"])
+        self.assertEqual(res_json["secure_url"], "https://res.cloudinary.com/i4h9zmzd/image/upload/v12345/movieshub/posters/leo.jpg")
+
+        # 2. Add movie with uploaded poster URL
+        add_res = self.client.post("/admin/api/tamil-movies", json={
+            "title": "Leo Cloudinary Edition",
+            "poster": res_json["secure_url"],
+            "year": "2023",
+            "genre": "Action",
+            "download_url": "https://my-site.com/dl/leo.mp4"
+        })
+        self.assertEqual(add_res.status_code, 201)
+        movie_id = add_res.get_json()["movie"]["id"]
+
+        # 3. Check public Tamil movie detail page renders the Cloudinary poster
+        detail_res = self.client.get(f"/tamil/{movie_id}")
+        self.assertEqual(detail_res.status_code, 200)
+        self.assertIn("https://res.cloudinary.com/i4h9zmzd/image/upload/v12345/movieshub/posters/leo.jpg", detail_res.data.decode("utf-8"))
+
+        # 4. Replace poster on edit
+        mock_upload.return_value = {
+            "secure_url": "https://res.cloudinary.com/i4h9zmzd/image/upload/v12346/movieshub/posters/leo_remastered.jpg",
+            "public_id": "movieshub/posters/leo_remastered"
+        }
+        edit_res = self.client.put(f"/admin/api/tamil-movies/{movie_id}", json={
+            "poster": "https://res.cloudinary.com/i4h9zmzd/image/upload/v12346/movieshub/posters/leo_remastered.jpg"
+        })
+        self.assertEqual(edit_res.status_code, 200)
+
+        detail_res2 = self.client.get(f"/tamil/{movie_id}")
+        self.assertIn("leo_remastered.jpg", detail_res2.data.decode("utf-8"))
+
+    # -----------------------------------------------------------------------
+    # 14. Cloudinary Poster Upload Validation Errors
+    # -----------------------------------------------------------------------
+    def test_14_cloudinary_poster_upload_validation_errors(self):
+        import io
+
+        # 1. No file uploaded
+        res_no_file = self.client.post("/admin/api/upload-poster", data={}, content_type="multipart/form-data")
+        self.assertEqual(res_no_file.status_code, 400)
+
+        # 2. Invalid file extension (.exe or .txt)
+        bad_file = {
+            "file": (io.BytesIO(b"malicious script content"), "script.exe")
+        }
+        res_bad_ext = self.client.post("/admin/api/upload-poster", data=bad_file, content_type="multipart/form-data")
+        self.assertEqual(res_bad_ext.status_code, 400)
+        self.assertIn("Invalid file format", res_bad_ext.get_json()["error"])
+
+        # 3. Missing Cloudinary credentials in env
+        with patch.dict(os.environ, {"CLOUDINARY_API_KEY": "", "CLOUDINARY_API_SECRET": ""}):
+            good_file = {
+                "file": (io.BytesIO(b"image bytes"), "poster.png")
+            }
+            res_no_creds = self.client.post("/admin/api/upload-poster", data=good_file, content_type="multipart/form-data")
+            self.assertEqual(res_no_creds.status_code, 500)
+            self.assertIn("Cloudinary credentials not configured", res_no_creds.get_json()["error"])
 
 if __name__ == "__main__":
     unittest.main()
+

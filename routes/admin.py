@@ -73,6 +73,85 @@ def import_page():
 
 
 # ---------------------------------------------------------------------------
+# Cloudinary Poster Upload API
+# ---------------------------------------------------------------------------
+
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "bmp", "svg"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@admin_bp.route("/api/upload-poster", methods=["POST"])
+def api_upload_poster():
+    """
+    Upload a poster image to Cloudinary.
+    Validates file format and size, performs server-side upload,
+    and returns secure_url to the admin frontend.
+    """
+    if "file" not in request.files and "poster" not in request.files:
+        return jsonify({"error": "No file uploaded. Please choose an image file."}), 400
+
+    file = request.files.get("file") or request.files.get("poster")
+    if not file or file.filename == "":
+        return jsonify({"error": "No file selected."}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({
+            "error": f"Invalid file format. Allowed formats: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        }), 400
+
+    # Validate file size without consuming file data completely
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+    if size > MAX_FILE_SIZE:
+        return jsonify({"error": "File size exceeds 10MB limit."}), 400
+
+    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME", "i4h9zmzd").strip()
+    api_key = os.environ.get("CLOUDINARY_API_KEY", "").strip()
+    api_secret = os.environ.get("CLOUDINARY_API_SECRET", "").strip()
+
+    if not (cloud_name and api_key and api_secret):
+        return jsonify({
+            "error": "Cloudinary credentials not configured. Please set CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in .env."
+        }), 500
+
+    try:
+        import cloudinary
+        import cloudinary.uploader
+
+        cloudinary.config(
+            cloud_name=cloud_name,
+            api_key=api_key,
+            api_secret=api_secret,
+            secure=True
+        )
+
+        upload_result = cloudinary.uploader.upload(
+            file,
+            folder="movieshub/posters",
+            resource_type="image"
+        )
+        secure_url = upload_result.get("secure_url") or upload_result.get("url")
+        if not secure_url:
+            return jsonify({"error": "Cloudinary did not return a valid secure image URL."}), 500
+
+        return jsonify({
+            "success": True,
+            "secure_url": secure_url,
+            "url": secure_url,
+            "public_id": upload_result.get("public_id"),
+            "format": upload_result.get("format"),
+            "bytes": upload_result.get("bytes")
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Cloudinary upload failed: {str(e)}"}), 500
+
+
+# ---------------------------------------------------------------------------
 # Tamil Movie CRUD API
 # ---------------------------------------------------------------------------
 
@@ -100,15 +179,18 @@ def api_add():
     if existing:
         return jsonify({"error": "A movie with this title already exists", "id": existing["id"]}), 409
 
+    poster = (data.get("poster") or data.get("poster_url") or "").strip()
     movie = {
         "id": str(uuid.uuid4()),
         "source": data.get("source", "admin"),
         "title": title,
-        "poster": data.get("poster", "").strip(),
+        "poster": poster,
+        "poster_url": poster,
         "description": data.get("description", "").strip(),
         "year": data.get("year", ""),
         "genre": data.get("genre", "").strip(),
         "download_url": data.get("download_url", "").strip(),
+        "download_options": data.get("download_options") or [],
         "source_url": data.get("source_url", "").strip(),
     }
 
@@ -133,14 +215,19 @@ def api_update(movie_id):
     movie = movies[idx]
 
     # Update only provided fields
-    updatable = ["title", "poster", "description", "year", "genre", "download_url", "download_options", "source_url"]
+    updatable = ["title", "poster", "poster_url", "description", "year", "genre", "download_url", "download_options", "source_url"]
     for field in updatable:
         if field in data:
-            movie[field] = str(data[field]).strip() if isinstance(data[field], str) else data[field]
+            val = str(data[field]).strip() if isinstance(data[field], str) else data[field]
+            movie[field] = val
+            if field in ("poster", "poster_url"):
+                movie["poster"] = val
+                movie["poster_url"] = val
 
     movies[idx] = movie
     save_tamil(movies)
     return jsonify({"success": True, "movie": movie})
+
 
 
 @admin_bp.route("/api/tamil-movies/<movie_id>", methods=["DELETE"])

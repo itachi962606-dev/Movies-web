@@ -27,7 +27,7 @@ TIMEOUT = 15
 
 # Default CSS selectors - can be overridden via config JSON
 DEFAULT_SELECTORS = {
-    "title": "h1, .movie-title, meta[property='og:title']",
+    "title": "h1, .movie-title, meta[property='og:title'], title",
     "poster_url": "img.poster, .poster img, meta[property='og:image']",
     "release_year": ".year, .release-year, meta[property='og:release_date']",
     "genre": ".genre a, .genres a, .genre",
@@ -46,23 +46,27 @@ QUALITY_REGEXES = [
     ("HD", re.compile(r'\bHD\b', re.IGNORECASE)),
 ]
 
-SIZE_REGEX = re.compile(r'(\d+(?:\.\d+)?)\s*(GB|MB|KB|G|M|K)\b', re.IGNORECASE)
+SIZE_REGEX = re.compile(r'(\d+(?:[.\s_-]\d+)?)\s*(GB|MB|KB|G|M|K)\b', re.IGNORECASE)
 
 
 def get_domain(url: str) -> str:
-    """Extract clean domain/hostname from a URL."""
+    """Extract clean domain/hostname from a URL, stripping 'www.' prefix."""
     if not url:
         return ""
+    url = url.strip()
     if "://" not in url:
         url = "https://" + url
     parsed = urlparse(url)
-    return (parsed.hostname or "").lower()
+    host = (parsed.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host
 
 
 def is_own_domain(url: str, own_site_url: str | None = None) -> bool:
     """
     Verify if the given URL belongs to OWN_SITE_URL.
-    Matches hostname exactly or as a valid subdomain.
+    Matches hostname exactly or as a valid subdomain, agnostic to www. prefix.
     """
     own = own_site_url or os.environ.get("OWN_SITE_URL", "").strip()
     if not own:
@@ -80,38 +84,75 @@ def is_own_domain(url: str, own_site_url: str | None = None) -> bool:
 
 def check_robots_permission(url: str) -> tuple[bool, str | None]:
     """
-    Check if the URL is allowed by robots.txt.
+    Check if the URL is allowed by robots.txt according to standard RFC 9309 rules.
     Returns (is_allowed: bool, error_message: str | None).
     
-    Rules for verified OWN_SITE_URL:
-    - Fetches robots.txt using requests with custom USER_AGENT and timeout.
-    - If robots.txt does not exist (404) or is not reachable: allowed.
-    - If robots.txt returns non-200 (401/403/5xx): do not arbitrarily block authorized site.
-    - If robots.txt is 200 OK: parses rules.
-    - If explicitly disallowed for our USER_AGENT or '*': returns False with clear error.
+    Logs:
+    1. robots.txt URL checked
+    2. User-Agent
+    3. Movie URL being evaluated
+    4. HTTP status code
+    5. Response body length
+    6. Parsed rules
+    7. Final decision
     """
     parts = urlparse(url)
     robots_url = f"{parts.scheme}://{parts.netloc}/robots.txt"
     headers = {"User-Agent": USER_AGENT}
+
+    print(f"[robots.txt] Checking robots URL: {robots_url}", file=sys.stderr)
+    print(f"[robots.txt] User-Agent: {USER_AGENT}", file=sys.stderr)
+    print(f"[robots.txt] Movie URL being checked: {url}", file=sys.stderr)
+
     try:
         resp = requests.get(robots_url, headers=headers, timeout=10)
+        body_len = len(resp.text)
+        print(f"[robots.txt] HTTP status returned: {resp.status_code}", file=sys.stderr)
+        print(f"[robots.txt] Response body length: {body_len} bytes", file=sys.stderr)
+
+        # Non-200 (e.g. 404 Not Found, 403 Forbidden, 5xx): per RFC, access is allowed
         if resp.status_code != 200:
+            print(f"[robots.txt] Parsed rules: None (HTTP {resp.status_code})", file=sys.stderr)
+            print(f"[robots.txt] Final decision for {url}: allowed=True (HTTP {resp.status_code})", file=sys.stderr)
             return True, None
+
+        # Empty body (0 bytes): no disallow rules exist -> allowed per RFC 9309
+        body = resp.text.strip()
+        if not body:
+            print(f"[robots.txt] Parsed rules: None (empty robots.txt file)", file=sys.stderr)
+            print(f"[robots.txt] Final decision for {url}: allowed=True (empty robots.txt)", file=sys.stderr)
+            return True, None
+
+        # Collect rule lines for logging and diagnostic visibility
+        raw_lines = resp.text.splitlines()
+        rule_lines = [line.strip() for line in raw_lines if line.strip() and not line.strip().startswith('#')]
+        print(f"[robots.txt] Parsed rules ({len(rule_lines)} directives): {rule_lines}", file=sys.stderr)
 
         rp = RobotFileParser()
         rp.set_url(robots_url)
-        rp.parse(resp.text.splitlines())
+        rp.parse(raw_lines)
 
-        # Check user-agent or wildcard
-        can_ua = rp.can_fetch(USER_AGENT, url)
-        can_star = rp.can_fetch("*", url)
+        # Check standard user agent matching
+        can_fetch = rp.can_fetch(USER_AGENT, url)
+        print(f"[robots.txt] Final decision for {url}: allowed={can_fetch}", file=sys.stderr)
 
-        if not can_ua or not can_star:
-            return False, "This URL is disallowed by your website's robots.txt. Please allow this path in robots.txt."
+        if not can_fetch:
+            # Find specific disallow rule for detailed reporting
+            path = parts.path or "/"
+            matching_disallow = []
+            for r in rule_lines:
+                if r.lower().startswith("disallow:"):
+                    rule_val = r.split(":", 1)[1].strip()
+                    if rule_val and (rule_val == "/" or path.startswith(rule_val)):
+                        matching_disallow.append(r)
+            
+            rule_detail = f" (matching rule: {', '.join(matching_disallow)})" if matching_disallow else ""
+            print(f"[robots.txt] Blocked by rule{rule_detail}", file=sys.stderr)
+            return False, f"This URL is disallowed by your website's robots.txt{rule_detail}. Please allow this path in robots.txt."
 
         return True, None
-    except Exception:
-        # If robots.txt cannot be reached, do not block own authorized site
+    except Exception as e:
+        print(f"[robots.txt] Request error for {robots_url}: {e}. Defaulting to allowed=True for own authorized site.", file=sys.stderr)
         return True, None
 
 
@@ -169,22 +210,27 @@ def extract_many(soup: BeautifulSoup, selector: str) -> list[str]:
     return items
 
 
-def parse_size_to_bytes(size_str: str | None) -> int | None:
-    """Convert human-readable size (e.g. '1.2 GB', '700 MB') into bytes."""
+def parse_size_to_bytes(size_str: str | None) -> tuple[str | None, int | None]:
+    """Convert human-readable size (e.g. '1.2 GB', '1 6 GB', '700 MB') into (formatted_str, bytes)."""
     if not size_str:
-        return None
+        return None, None
     m = SIZE_REGEX.search(size_str)
     if not m:
-        return None
-    val = float(m.group(1))
+        return None, None
+    num_part = m.group(1).replace('_', '.').replace('-', '.').replace(' ', '.')
+    try:
+        val = float(num_part)
+    except ValueError:
+        return None, None
+
     unit = m.group(2).upper()
     if unit in ("GB", "G"):
-        return int(val * 1024 * 1024 * 1024)
+        return f"{val:.1f} GB", int(val * 1024 * 1024 * 1024)
     elif unit in ("MB", "M"):
-        return int(val * 1024 * 1024)
+        return f"{val:.0f} MB" if val.is_integer() else f"{val:.1f} MB", int(val * 1024 * 1024)
     elif unit in ("KB", "K"):
-        return int(val * 1024)
-    return None
+        return f"{val:.0f} KB", int(val * 1024)
+    return None, None
 
 
 def format_bytes(num_bytes: int) -> str:
@@ -199,7 +245,7 @@ def format_bytes(num_bytes: int) -> str:
     return f"{num_bytes} B"
 
 
-def detect_quality_from_context(element, href: str) -> str:
+def detect_quality_from_context(element, href: str, page_context: str = "") -> str:
     """
     Detect video quality (e.g. 1080p, 720p, 480p, 4K, HD)
     from element text, attributes, URL, or surrounding context.
@@ -236,10 +282,16 @@ def detect_quality_from_context(element, href: str) -> str:
                 if pattern.search(parent_text):
                     return label
 
+    # 5. Check page context (e.g. title tag, meta description, page URL)
+    if page_context:
+        for label, pattern in QUALITY_REGEXES:
+            if pattern.search(page_context):
+                return label
+
     return "Default"
 
 
-def detect_size_from_context(element, href: str, fetch_head: bool = True) -> tuple[str | None, int | None]:
+def detect_size_from_context(element, href: str, fetch_head: bool = True, page_context: str = "") -> tuple[str | None, int | None]:
     """
     Detect file size.
     Prefer file size displayed directly on the webpage (near link, in text, parent, attributes).
@@ -250,30 +302,38 @@ def detect_size_from_context(element, href: str, fetch_head: bool = True) -> tup
     # 1. Check element text
     if element:
         text = element.get_text(strip=True)
-        m = SIZE_REGEX.search(text)
-        if m:
-            size_str = m.group(0).strip()
-            return size_str, parse_size_to_bytes(size_str)
+        display, num_bytes = parse_size_to_bytes(text)
+        if display:
+            return display, num_bytes
 
         # 2. Check attributes
         for attr in ("data-size", "data-filesize", "title"):
             val = element.get(attr)
             if val:
-                m = SIZE_REGEX.search(str(val))
-                if m:
-                    size_str = m.group(0).strip()
-                    return size_str, parse_size_to_bytes(size_str)
+                display, num_bytes = parse_size_to_bytes(str(val))
+                if display:
+                    return display, num_bytes
 
         # 3. Check sibling / parent row or container
         parent = element.find_parent(["tr", "li", "div", "p"])
         if parent:
-            # Look for size pattern in parent text
-            m = SIZE_REGEX.search(parent.get_text())
-            if m:
-                size_str = m.group(0).strip()
-                return size_str, parse_size_to_bytes(size_str)
+            display, num_bytes = parse_size_to_bytes(parent.get_text())
+            if display:
+                return display, num_bytes
 
-    # 4. HEAD request fallback if not found in HTML
+    # 4. Check href text/slug (e.g. /download/movie-1080p-1-6-gb/)
+    if href:
+        display, num_bytes = parse_size_to_bytes(href)
+        if display:
+            return display, num_bytes
+
+    # 5. Check page context (title, meta description)
+    if page_context:
+        display, num_bytes = parse_size_to_bytes(page_context)
+        if display:
+            return display, num_bytes
+
+    # 6. HEAD request fallback if not found in HTML
     if fetch_head and href and href.startswith(("http://", "https://")):
         try:
             resp = requests.head(href, headers={"User-Agent": USER_AGENT}, allow_redirects=True, timeout=5)
@@ -294,15 +354,17 @@ def extract_all_download_options(soup: BeautifulSoup, base_url: str, selector: s
     
     Returns:
         (download_options, primary_download_url)
-        where download_options is a list of dicts:
-        [
-          {"quality": "1080p", "size": "1.2 GB", "size_bytes": 1288490188, "url": "https://..."},
-          {"quality": "720p", "size": "700 MB", "size_bytes": 734003200, "url": "https://..."},
-          {"quality": "480p", "size": "500 MB", "size_bytes": 524288000, "url": "https://..."}
-        ]
     """
     candidates = []
     seen_urls = set()
+
+    # Build page context string from title, meta description, and page URL
+    page_title = soup.title.get_text() if soup.title else ""
+    meta_desc = ""
+    meta_el = soup.select_one("meta[name='description'], meta[property='og:description']")
+    if meta_el and meta_el.get("content"):
+        meta_desc = meta_el.get("content")
+    page_context = f"{page_title} {meta_desc} {base_url}"
 
     # 1. Configured selector candidates
     if selector:
@@ -357,8 +419,8 @@ def extract_all_download_options(soup: BeautifulSoup, base_url: str, selector: s
     grouped: dict[str, list[dict]] = {}
 
     for el, url in candidates:
-        quality = detect_quality_from_context(el, url)
-        size_display, size_bytes = detect_size_from_context(el, url, fetch_head=fetch_head)
+        quality = detect_quality_from_context(el, url, page_context=page_context)
+        size_display, size_bytes = detect_size_from_context(el, url, fetch_head=fetch_head, page_context=page_context)
 
         item = {
             "quality": quality,
@@ -418,26 +480,38 @@ def scrape(url: str, selectors: dict, own_site_url: str | None = None, fetch_hea
 
     soup = BeautifulSoup(html, "html.parser")
 
-    title = extract_one(soup, selectors.get("title", ""), url)
+    raw_title = extract_one(soup, selectors.get("title", ""), url)
     poster_url = extract_one(soup, selectors.get("poster_url", ""), url)
     release_year = extract_one(soup, selectors.get("release_year", ""), url)
     genre = extract_many(soup, selectors.get("genre", ""))
     description = extract_one(soup, selectors.get("description", ""), url)
+
+    # Clean title if it contains generic suffixes like 'Download Moviesda' or '- isaimini'
+    title = raw_title
+    if title:
+        # If title came from <title> tag, clean common suffixes
+        title = re.sub(r'\s*[-|–]\s*(?:isaimini|moviesda|tamilrockers|download).*$', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'\s+(?:full\s+movie\s+download|movie\s+download|download)\s+.*$', '', title, flags=re.IGNORECASE).strip()
+
+    # Extract year from title or text if not found by selector
+    if not release_year:
+        search_text = f"{raw_title or ''} {description or ''} {url}"
+        m_year = re.search(r'\b(19\d\d|20\d\d)\b', search_text)
+        if m_year:
+            release_year = m_year.group(1)
+    else:
+        m = re.search(r'\b(19\d\d|20\d\d)\b', release_year)
+        if m:
+            release_year = m.group(1)
 
     # Extract all quality options and pick smallest per quality
     download_options, primary_download_url = extract_all_download_options(
         soup, url, selectors.get("download_link"), fetch_head=fetch_head
     )
 
-    # Cleanup year if it contains extra text like 'Release: 2026'
-    if release_year:
-        m = re.search(r"\b(19\d\d|20\d\d)\b", release_year)
-        if m:
-            release_year = m.group(1)
-
     return {
         "source_url": url,
-        "title": title,
+        "title": title or raw_title,
         "poster_url": poster_url,
         "release_year": release_year,
         "genre": genre,
